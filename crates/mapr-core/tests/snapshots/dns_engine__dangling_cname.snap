@@ -1,0 +1,76 @@
+---
+source: crates/mapr-core/tests/dns_engine.rs
+expression: value
+---
+{
+  "edges": [
+    {
+      "confidence": "observed",
+      "evidence": [
+        {
+          "attributes": {
+            "resolver": "fake:53",
+            "ttl": 300
+          },
+          "detail": "CNAME api.example.com -> dangling.example.com (TTL 300)",
+          "observed_at": "1970-01-01T00:00:00Z",
+          "source": "dns_query"
+        }
+      ],
+      "from": "hostname:api.example.com",
+      "relation": "cname",
+      "to": "hostname:dangling.example.com"
+    }
+  ],
+  "gaps": [
+    {
+      "at": "hostname:dangling.example.com",
+      "detail": "NXDOMAIN for dangling.example.com",
+      "needs": null,
+      "reason": "nxdomain"
+    },
+    {
+      "at": "hostname:dangling.example.com",
+      "detail": "NXDOMAIN for dangling.example.com",
+      "needs": null,
+      "reason": "nxdomain"
+    }
+  ],
+  "generated_at": "1970-01-01T00:00:00Z",
+  "nodes": [
+    {
+      "attributes": {},
+      "evidence": [],
+      "id": "hostname:api.example.com",
+      "identifier": null,
+      "kind": "hostname",
+      "name": "api.example.com",
+      "provider": null,
+      "service": null
+    },
+    {
+      "attributes": {},
+      "evidence": [],
+      "id": "hostname:dangling.example.com",
+      "identifier": null,
+      "kind": "hostname",
+      "name": "dangling.example.com",
+      "provider": null,
+      "service": null
+    }
+  ],
+  "paths": [
+    [
+      "hostname:api.example.com",
+      "hostname:dangling.example.com"
+    ]
+  ],
+  "schema_version": "1",
+  "stages_run": [
+    "dns"
+  ],
+  "target": {
+    "input": "api.example.com",
+    "kind": "hostname"
+  }
+}

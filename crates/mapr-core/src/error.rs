@@ -14,4 +14,7 @@ pub enum CoreError {
 
     #[error("Engine error: {0}")]
     Engine(String),
+
+    #[error("{0}")]
+    Other(String),
 }
