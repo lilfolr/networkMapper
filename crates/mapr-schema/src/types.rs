@@ -101,16 +101,20 @@ pub enum Relation {
 }
 
 /// Confidence level for nodes and edges.
+///
+/// Ordered from weakest to strongest: `Inferred < Observed < Verified`.
 #[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Confidence {
-    /// Confirmed via provider API inspection.
-    Verified,
-    /// Seen on the wire: DNS, response headers, TLS certs.
-    Observed,
     /// Heuristic or statistical inference.
     Inferred,
+    /// Seen on the wire: DNS, response headers, TLS certs.
+    Observed,
+    /// Confirmed via provider API inspection.
+    Verified,
 }
 
 /// Where a piece of evidence came from.

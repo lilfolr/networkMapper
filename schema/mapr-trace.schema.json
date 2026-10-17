@@ -75,13 +75,13 @@
   },
   "definitions": {
     "Confidence": {
-      "description": "Confidence level for nodes and edges.",
+      "description": "Confidence level for nodes and edges.\n\nOrdered from weakest to strongest: `Inferred < Observed < Verified`.",
       "oneOf": [
         {
-          "description": "Confirmed via provider API inspection.",
+          "description": "Heuristic or statistical inference.",
           "type": "string",
           "enum": [
-            "verified"
+            "inferred"
           ]
         },
         {
@@ -92,10 +92,10 @@
           ]
         },
         {
-          "description": "Heuristic or statistical inference.",
+          "description": "Confirmed via provider API inspection.",
           "type": "string",
           "enum": [
-            "inferred"
+            "verified"
           ]
         }
       ]
