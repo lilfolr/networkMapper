@@ -6,6 +6,7 @@
 //! mutates the graph in place; the engine merges the output.
 
 pub mod aws;
+pub mod classify;
 pub mod dns;
 pub mod fingerprint;
 
