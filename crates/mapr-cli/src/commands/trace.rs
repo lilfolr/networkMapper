@@ -4,6 +4,7 @@ use anyhow::Result;
 use mapr_core::engine::context::Context;
 use mapr_core::render::{render_trace, OutputFormat};
 use mapr_core::stages::aws::AwsStage;
+use mapr_core::stages::dns::client::HickoryDnsClient;
 use mapr_core::stages::dns::DnsStage;
 use mapr_core::stages::fingerprint::FingerprintStage;
 use mapr_core::stages::Stage;
@@ -17,8 +18,6 @@ pub fn run(target: &str, global: &GlobalArgs) -> Result<ExitCode> {
         eprintln!("Tracing request flow for target: {target}");
     }
 
-    // Parse an optional timeout string (e.g. "10s", "2m") into seconds.
-    // For now accept plain integer seconds only; duration parsing is Phase 6.
     let timeout_seconds = global
         .timeout
         .as_deref()
@@ -32,16 +31,19 @@ pub fn run(target: &str, global: &GlobalArgs) -> Result<ExitCode> {
         ..EngineConfig::default()
     };
 
+    let dns_client = Arc::new(
+        HickoryDnsClient::from_system_config()
+            .map_err(|e| anyhow::anyhow!("failed to initialise DNS client: {e}"))?,
+    );
+
     let stages: Vec<Arc<dyn Stage>> = vec![
-        Arc::new(DnsStage),
+        Arc::new(DnsStage::new(dns_client)),
         Arc::new(FingerprintStage),
         Arc::new(AwsStage),
     ];
     let context = Arc::new(Context::with_system_clock());
     let engine = Engine::new(stages, context);
 
-    // The engine is async; run it on a single-threaded tokio runtime here.
-    // The CLI entry point is synchronous so we create a runtime inline.
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
