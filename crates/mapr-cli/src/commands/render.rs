@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use mapr_core::render::{render_trace, OutputFormat};
-use mapr_schema::{ExitCode, TraceGraph};
+use mapr_schema::{ExitCode, Trace};
 use std::fs;
 use std::path::Path;
 
@@ -14,7 +14,7 @@ pub fn run(file: &Path, global: &GlobalArgs) -> Result<ExitCode> {
     let contents = fs::read_to_string(file)
         .with_context(|| format!("Failed to read trace file: {}", file.display()))?;
 
-    let trace: TraceGraph = serde_json::from_str(&contents)
+    let trace: Trace = serde_json::from_str(&contents)
         .with_context(|| format!("Failed to parse trace JSON from: {}", file.display()))?;
 
     let format = match global.output {

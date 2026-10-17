@@ -1,4 +1,4 @@
-use mapr_schema::{ExitCode, TraceGraph, SCHEMA_VERSION};
+use mapr_schema::{ExitCode, Trace, SCHEMA_VERSION};
 
 use crate::error::CoreError;
 
@@ -10,18 +10,23 @@ pub struct EngineConfig {
     pub timeout_seconds: Option<u64>,
 }
 
-/// Trace engine entrypoint stub.
-pub fn execute_trace(
-    target: &str,
-    _config: &EngineConfig,
-) -> Result<(TraceGraph, ExitCode), CoreError> {
-    let graph = TraceGraph {
+/// Trace engine entrypoint stub (placeholder until Phase 2).
+pub fn execute_trace(target: &str, _config: &EngineConfig) -> Result<(Trace, ExitCode), CoreError> {
+    use chrono::Utc;
+    use mapr_schema::{Target, TargetKind, Timestamp};
+
+    let trace = Trace {
         schema_version: SCHEMA_VERSION.to_string(),
-        target: target.to_string(),
+        target: Target {
+            input: target.to_string(),
+            kind: TargetKind::Hostname,
+        },
+        generated_at: Timestamp::from(Utc::now()),
+        stages_run: Vec::new(),
         nodes: Vec::new(),
         edges: Vec::new(),
         gaps: Vec::new(),
         paths: Vec::new(),
     };
-    Ok((graph, ExitCode::Success))
+    Ok((trace, ExitCode::Success))
 }

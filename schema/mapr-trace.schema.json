@@ -1,0 +1,438 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Trace",
+  "description": "Complete trace graph representing how a request reaches its destination.",
+  "type": "object",
+  "required": [
+    "edges",
+    "gaps",
+    "generated_at",
+    "nodes",
+    "paths",
+    "schema_version",
+    "stages_run",
+    "target"
+  ],
+  "properties": {
+    "edges": {
+      "description": "All edges discovered, sorted by (from, to, relation).",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Edge"
+      }
+    },
+    "gaps": {
+      "description": "Gaps where the trace could not continue.",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Gap"
+      }
+    },
+    "generated_at": {
+      "description": "When the trace was generated (RFC 3339 UTC string on the wire).",
+      "allOf": [
+        {
+          "$ref": "#/definitions/Timestamp"
+        }
+      ]
+    },
+    "nodes": {
+      "description": "All nodes discovered, sorted by id.",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Node"
+      }
+    },
+    "paths": {
+      "description": "Derived end-to-end paths (computed from the graph, never hand-built).",
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "schema_version": {
+      "description": "Schema format version. Bump on breaking changes.",
+      "type": "string"
+    },
+    "stages_run": {
+      "description": "Names of the stages that ran, in execution order.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "target": {
+      "description": "The original input that was traced.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/Target"
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "Confidence": {
+      "description": "Confidence level for nodes and edges.",
+      "oneOf": [
+        {
+          "description": "Confirmed via provider API inspection.",
+          "type": "string",
+          "enum": [
+            "verified"
+          ]
+        },
+        {
+          "description": "Seen on the wire: DNS, response headers, TLS certs.",
+          "type": "string",
+          "enum": [
+            "observed"
+          ]
+        },
+        {
+          "description": "Heuristic or statistical inference.",
+          "type": "string",
+          "enum": [
+            "inferred"
+          ]
+        }
+      ]
+    },
+    "Edge": {
+      "description": "A directed edge connecting two nodes.",
+      "type": "object",
+      "required": [
+        "confidence",
+        "evidence",
+        "from",
+        "relation",
+        "to"
+      ],
+      "properties": {
+        "confidence": {
+          "description": "How confident we are in this edge.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Confidence"
+            }
+          ]
+        },
+        "evidence": {
+          "description": "Evidence records that support this edge.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Evidence"
+          }
+        },
+        "from": {
+          "description": "Source node.",
+          "type": "string"
+        },
+        "relation": {
+          "description": "Semantic relationship.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Relation"
+            }
+          ]
+        },
+        "to": {
+          "description": "Destination node.",
+          "type": "string"
+        }
+      }
+    },
+    "Evidence": {
+      "description": "Structured evidence backing a node or edge.",
+      "type": "object",
+      "required": [
+        "attributes",
+        "detail",
+        "observed_at",
+        "source"
+      ],
+      "properties": {
+        "attributes": {
+          "description": "Source-specific extra data (resolver address, TTL, range sync token, ...).",
+          "type": "object",
+          "additionalProperties": true
+        },
+        "detail": {
+          "description": "Raw observation or summary string.",
+          "type": "string"
+        },
+        "observed_at": {
+          "description": "When the evidence was recorded (RFC 3339 UTC string on the wire).",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Timestamp"
+            }
+          ]
+        },
+        "source": {
+          "description": "Where the evidence came from.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/EvidenceSource"
+            }
+          ]
+        }
+      }
+    },
+    "EvidenceSource": {
+      "description": "Where a piece of evidence came from.",
+      "type": "string",
+      "enum": [
+        "dns_query",
+        "ip_range",
+        "reverse_dns",
+        "tls",
+        "http",
+        "aws_api",
+        "unknown"
+      ]
+    },
+    "Gap": {
+      "description": "A recorded gap: a point where the trace could not continue.",
+      "type": "object",
+      "required": [
+        "detail",
+        "reason"
+      ],
+      "properties": {
+        "at": {
+          "description": "Node where traversal halted, if known.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "detail": {
+          "description": "Human-readable diagnostic message.",
+          "type": "string"
+        },
+        "needs": {
+          "description": "Provider and permissions needed to fill this gap (for later phases).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Needs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "description": "Categorized reason.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/GapReason"
+            }
+          ]
+        }
+      }
+    },
+    "GapReason": {
+      "description": "Reasons why a trace path could not be continued.",
+      "type": "string",
+      "enum": [
+        "no_credentials",
+        "access_denied",
+        "unsupported_service",
+        "timeout",
+        "budget_exceeded",
+        "nxdomain",
+        "dns_failure",
+        "network_error",
+        "no_range_data",
+        "private"
+      ]
+    },
+    "Needs": {
+      "description": "A provider and the IAM permissions needed to fill a gap.",
+      "type": "object",
+      "required": [
+        "permissions",
+        "provider"
+      ],
+      "properties": {
+        "permissions": {
+          "description": "IAM actions (or equivalent) required to fill the gap.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "provider": {
+          "description": "Provider that holds the missing information.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Provider"
+            }
+          ]
+        }
+      }
+    },
+    "Node": {
+      "description": "A node in the trace graph.",
+      "type": "object",
+      "required": [
+        "attributes",
+        "evidence",
+        "id",
+        "kind",
+        "name"
+      ],
+      "properties": {
+        "attributes": {
+          "description": "Provider- or service-specific attributes.",
+          "type": "object",
+          "additionalProperties": true
+        },
+        "evidence": {
+          "description": "Evidence records that support this node.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Evidence"
+          }
+        },
+        "id": {
+          "description": "Stable, canonical identifier for this node.",
+          "type": "string"
+        },
+        "identifier": {
+          "description": "Real provider identifier (ARN, resource ID) when known.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "description": "High-level classification.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/NodeKind"
+            }
+          ]
+        },
+        "name": {
+          "description": "Human-readable label (hostname, IP string, ARN short name, ...).",
+          "type": "string"
+        },
+        "provider": {
+          "description": "Cloud provider, if known.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Provider"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "service": {
+          "description": "Specific service name (e.g. \"cloudfront\", \"ec2\", \"alb\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "NodeKind": {
+      "description": "High-level categorization of a network or cloud entity.",
+      "type": "string",
+      "enum": [
+        "hostname",
+        "ip",
+        "cidr",
+        "cdn",
+        "load_balancer",
+        "gateway",
+        "compute",
+        "unknown"
+      ]
+    },
+    "Provider": {
+      "description": "Cloud or network provider.",
+      "type": "string",
+      "enum": [
+        "aws",
+        "cloudflare",
+        "fastly",
+        "akamai",
+        "unknown"
+      ]
+    },
+    "Relation": {
+      "description": "The semantic relationship captured by an edge.",
+      "oneOf": [
+        {
+          "description": "A CNAME record pointing from one name to another.",
+          "type": "string",
+          "enum": [
+            "cname"
+          ]
+        },
+        {
+          "description": "An A or AAAA record resolving a name to an IP.",
+          "type": "string",
+          "enum": [
+            "resolves_to"
+          ]
+        },
+        {
+          "description": "An IP or hostname is fronted by a CDN or load balancer.",
+          "type": "string",
+          "enum": [
+            "served_by"
+          ]
+        },
+        {
+          "description": "Traffic is routed from one node to another (e.g. ALB to ECS task).",
+          "type": "string",
+          "enum": [
+            "routes_to"
+          ]
+        }
+      ]
+    },
+    "Target": {
+      "description": "The original input and its inferred kind.",
+      "type": "object",
+      "required": [
+        "input",
+        "kind"
+      ],
+      "properties": {
+        "input": {
+          "description": "The raw string the user supplied.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "How the input was interpreted.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/TargetKind"
+            }
+          ]
+        }
+      }
+    },
+    "TargetKind": {
+      "description": "Classification of the user's input.",
+      "type": "string",
+      "enum": [
+        "hostname",
+        "ip",
+        "cidr"
+      ]
+    },
+    "Timestamp": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -3,10 +3,10 @@ pub mod dns;
 pub mod fingerprint;
 
 use crate::error::CoreError;
-use mapr_schema::TraceGraph;
+use mapr_schema::Trace;
 
-/// Shared trait for trace discovery stages.
+/// Shared trait for trace discovery stages (placeholder until Phase 2).
 pub trait Stage {
     fn name(&self) -> &'static str;
-    fn execute(&self, graph: &mut TraceGraph) -> Result<(), CoreError>;
+    fn execute(&self, graph: &mut Trace) -> Result<(), CoreError>;
 }

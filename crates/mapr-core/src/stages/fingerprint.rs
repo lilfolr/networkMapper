@@ -1,6 +1,6 @@
 use super::Stage;
 use crate::error::CoreError;
-use mapr_schema::TraceGraph;
+use mapr_schema::Trace;
 
 pub struct FingerprintStage;
 
@@ -9,7 +9,7 @@ impl Stage for FingerprintStage {
         "fingerprint"
     }
 
-    fn execute(&self, _graph: &mut TraceGraph) -> Result<(), CoreError> {
+    fn execute(&self, _graph: &mut Trace) -> Result<(), CoreError> {
         Ok(())
     }
 }
