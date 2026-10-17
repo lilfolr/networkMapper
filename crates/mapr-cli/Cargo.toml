@@ -1,0 +1,22 @@
+[package]
+name = "mapr-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+default-run = "mapr"
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "mapr"
+path = "src/main.rs"
+
+[dependencies]
+mapr-schema = { workspace = true }
+mapr-core = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
