@@ -4,9 +4,16 @@ use anyhow::Result;
 use mapr_core::engine::context::Context;
 use mapr_core::render::{render_trace, OutputFormat};
 use mapr_core::stages::aws::AwsStage;
+use mapr_core::stages::classify::ClassifyStage;
 use mapr_core::stages::dns::client::HickoryDnsClient;
 use mapr_core::stages::dns::DnsStage;
-use mapr_core::stages::fingerprint::FingerprintStage;
+use mapr_core::stages::fingerprint::loader::{load, LoadConfig, LoadResult};
+use mapr_core::stages::fingerprint::providers::aws::AwsRangeSource;
+use mapr_core::stages::fingerprint::providers::cloudflare::{
+    CloudflareV4Source, CloudflareV6Source,
+};
+use mapr_core::stages::fingerprint::range_db::{RangeDatabase, RangeSource};
+use mapr_core::stages::fingerprint::IpRangeStage;
 use mapr_core::stages::Stage;
 use mapr_core::{Engine, EngineConfig};
 use mapr_schema::ExitCode;
@@ -31,6 +38,14 @@ pub fn run(target: &str, global: &GlobalArgs) -> Result<ExitCode> {
         ..EngineConfig::default()
     };
 
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| anyhow::anyhow!("failed to build async runtime: {e}"))?;
+
+    // Load range databases (best-effort; missing data becomes a gap at run time).
+    let range_db = rt.block_on(build_range_db(global.offline))?;
+
     let dns_client = Arc::new(
         HickoryDnsClient::from_system_config()
             .map_err(|e| anyhow::anyhow!("failed to initialise DNS client: {e}"))?,
@@ -38,16 +53,13 @@ pub fn run(target: &str, global: &GlobalArgs) -> Result<ExitCode> {
 
     let stages: Vec<Arc<dyn Stage>> = vec![
         Arc::new(DnsStage::new(dns_client)),
-        Arc::new(FingerprintStage),
+        Arc::new(ClassifyStage),
+        Arc::new(IpRangeStage::new(Arc::clone(&range_db))),
         Arc::new(AwsStage),
     ];
-    let context = Arc::new(Context::with_system_clock());
-    let engine = Engine::new(stages, context);
 
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .map_err(|e| anyhow::anyhow!("failed to build async runtime: {e}"))?;
+    let context = Arc::new(Context::with_system_clock().with_range_db(range_db));
+    let engine = Engine::new(stages, context);
 
     let (trace, exit_code) = rt
         .block_on(engine.run(target, &config))
@@ -73,4 +85,38 @@ pub fn run(target: &str, global: &GlobalArgs) -> Result<ExitCode> {
     }
 
     Ok(exit_code)
+}
+
+/// Load all provider range databases, returning a shared `RangeDatabase`.
+///
+/// Missing or failed sources produce warnings on stderr but do not abort;
+/// the stage will emit `NoRangeData` gaps for IPs it cannot classify.
+async fn build_range_db(offline: bool) -> Result<Arc<RangeDatabase>> {
+    let load_cfg = LoadConfig {
+        offline,
+        ..LoadConfig::default()
+    };
+
+    let mut db = RangeDatabase::new();
+
+    async fn load_source(source: &dyn RangeSource, cfg: &LoadConfig, db: &mut RangeDatabase) {
+        match load(source, cfg).await {
+            LoadResult::Data { bytes, .. } => match source.parse(&bytes) {
+                Ok(entries) => db.extend(entries),
+                Err(e) => eprintln!("warning: failed to parse {} ranges: {e}", source.name()),
+            },
+            LoadResult::NoData => {
+                eprintln!(
+                    "warning: no range data for {} (offline or fetch failed)",
+                    source.name()
+                );
+            }
+        }
+    }
+
+    load_source(&AwsRangeSource, &load_cfg, &mut db).await;
+    load_source(&CloudflareV4Source, &load_cfg, &mut db).await;
+    load_source(&CloudflareV6Source, &load_cfg, &mut db).await;
+
+    Ok(Arc::new(db))
 }
