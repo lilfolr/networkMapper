@@ -57,6 +57,8 @@ pub enum DnsRData {
     A(Ipv4Addr),
     /// AAAA record (IPv6 address).
     Aaaa(Ipv6Addr),
+    /// PTR record target name.
+    Ptr(String),
     /// Any other record type we do not process further.
     Other,
 }
@@ -82,6 +84,7 @@ pub enum QueryRecordType {
     Cname,
     A,
     Aaaa,
+    Ptr,
 }
 
 impl From<QueryRecordType> for RecordType {
@@ -90,6 +93,7 @@ impl From<QueryRecordType> for RecordType {
             QueryRecordType::Cname => RecordType::CNAME,
             QueryRecordType::A => RecordType::A,
             QueryRecordType::Aaaa => RecordType::AAAA,
+            QueryRecordType::Ptr => RecordType::PTR,
         }
     }
 }
@@ -208,6 +212,7 @@ fn map_hickory_result(result: Result<hickory_resolver::lookup::Lookup, NetError>
                         RData::CNAME(cname) => DnsRData::Cname(cname.0.to_string()),
                         RData::A(a) => DnsRData::A(a.0),
                         RData::AAAA(aaaa) => DnsRData::Aaaa(aaaa.0),
+                        RData::PTR(ptr) => DnsRData::Ptr(ptr.0.to_string()),
                         _ => DnsRData::Other,
                     };
                     DnsRecord { name, data, ttl }

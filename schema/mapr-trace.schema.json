@@ -188,6 +188,7 @@
         "dns_query",
         "ip_range",
         "reverse_dns",
+        "reachability",
         "tls",
         "http",
         "aws_api",

@@ -9,6 +9,8 @@ pub mod aws;
 pub mod classify;
 pub mod dns;
 pub mod fingerprint;
+pub mod reachability;
+pub mod reverse_dns;
 
 use std::sync::Arc;
 
@@ -69,6 +71,15 @@ pub trait Stage: Send + Sync {
 
     /// The privilege tier required by this stage.
     fn tier(&self) -> Tier;
+
+    /// Execution order group for this stage.
+    ///
+    /// Stages in lower order groups run first and their outputs are merged
+    /// into the node before stages in higher order groups are run on that node.
+    /// Default order is 0.
+    fn order(&self) -> u8 {
+        0
+    }
 
     /// Returns true if this stage can process the given node.
     ///

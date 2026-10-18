@@ -125,6 +125,7 @@ pub enum EvidenceSource {
     DnsQuery,
     IpRange,
     ReverseDns,
+    Reachability,
     Tls,
     Http,
     AwsApi,
