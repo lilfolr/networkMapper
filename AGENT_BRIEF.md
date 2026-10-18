@@ -296,6 +296,39 @@ A stage never mutates the graph. It returns additions and the engine merges them
 
 ---
 
+## Phase 7b: TCP reachability
+
+**Goal:** record how a TCP connection to an IP actually behaves, as classified evidence. Refused vs timeout vs unreachable is the most useful signal for "why is this failing", and TLS and HTTP should reuse the result instead of connecting blind.
+
+**Scope rules**
+- Use plain `connect()` only. No raw sockets, no ICMP echo, no SYN scanning, no traceroute, no root or `CAP_NET_RAW`.
+- This stage accepts `Ip` nodes only. It never expands a `Cidr` node into addresses.
+- Skip any node that carries a `Private` gap.
+- Default ports are 443 and 80. Add a repeatable `--port` flag (this phase authorizes it). Hard cap of 8 ports per IP; exceeding it is an input error, not a warning. No port ranges.
+
+**Tasks**
+
+1. **Engine amendment (modifies Phase 2 code and tests).** Add `fn order(&self) -> u8` to `Stage`, default 0. For a given node, run stages in ascending `order` groups: stages within a group run concurrently, and their output is merged into the node before the next group starts, so later stages see earlier evidence and attributes in `accepts` and `run`. Reachability uses order 0. TLS and HTTP move to order 1. Add engine tests proving a later-order stage observes earlier-order output, and that same-order stages stay concurrent.
+2. **Reachability client.** Define a `Reachability` trait: `connect(addr: SocketAddr, timeout: Duration) -> ConnectOutcome`. Implement it with `tokio::net::TcpStream` and a fake for tests. The outcome enum has: `Connected { elapsed }`, `Refused`, `TimedOut`, `Unreachable`, `Other(kind)`. Map from `io::ErrorKind`, and verify what the pinned toolchain exposes for network and host unreachable. If it is not available, match raw OS error codes per platform. Document the mapping and which platforms you verified it on.
+3. **The stage.** For each allowed port, connect concurrently (bounded by the engine semaphore), using the global `--timeout` with a 3 second default per connection. Emit one `Evidence` per port with a new `EvidenceSource::Reachability` variant (additive, `#[non_exhaustive]`, authorized by this phase; no schema version bump). Evidence attributes: `port`, `outcome`, `elapsed_ms` when connected, and `vantage: "local"`.
+4. **Machine-readable result.** Also set a node attribute `tcp`, a map of port to outcome string (`connected`, `refused`, `timed_out`, `unreachable`, `other`). Downstream stages read this attribute and never parse evidence text.
+5. **Gaps.** If no probed port connected, emit exactly one gap for that IP: `Timeout` if every port timed out, otherwise `NetworkError`. The detail states per-port outcomes. A mix of connected and failed ports emits no gap.
+6. **Wording rules.** Evidence and gap text describes observations only, and always names the vantage point. Good: `TCP connect to 203.0.113.5:443 succeeded in 18ms from this machine`, `TCP connect refused`, `no response within 3s (could be filtered, dropped or host down)`. The words "alive", "dead" and "down" must never appear as a conclusion. Add a test that scans all emitted strings for them.
+7. **Amend Phase 8 and Phase 9 consumers.** The TLS stage only runs on an `Ip` node where `tcp["443"]` is `connected`. The HTTP stage only runs for ports with a `connected` entry. If reachability produced a gap, TLS and HTTP skip silently and do not add a duplicate gap. They reuse the outcome, not the socket. If a connection later resets or the handshake is cut after a successful connect, those stages record a `reset_after_connect` outcome as evidence on that port.
+8. **Output.** The text renderer shows per-port outcome and timing under each IP. `--redact` masks IPs inside evidence and gap strings, including these.
+
+**Done when**
+- Fake-based tests cover: connected, refused, timeout, unreachable, other error, mixed port results, all-timeout gap, all-refused gap, mixed results with no gap, private IP skipped, CIDR node ignored, port cap exceeded.
+- Loopback tests (bind `127.0.0.1:0`) cover a real connected case and a real refused case. The timeout case is tested with the fake only.
+- The wording test from task 6 passes.
+- Engine tests from task 1 pass, and all earlier phases' tests still pass.
+- Redaction test confirms no raw IP appears in any output format for a `--redact` run.
+
+**Out of scope:** ICMP, SYN scanning, traceroute, UDP probes, port ranges, banner grabbing, and any default sweep of a CIDR.
+
+---
+
+
 ## Phase 8: TLS inspection
 
 **Tasks**

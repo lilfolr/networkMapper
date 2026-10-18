@@ -1,0 +1,75 @@
+---
+source: crates/mapr-core/tests/ip_range_engine.rs
+expression: value
+---
+{
+  "edges": [
+    {
+      "confidence": "observed",
+      "evidence": [
+        {
+          "attributes": {
+            "resolver": "fake:53",
+            "ttl": 60
+          },
+          "detail": "A doc.example.com -> 192.0.2.1 (TTL 60)",
+          "observed_at": "1970-01-01T00:00:00Z",
+          "source": "dns_query"
+        }
+      ],
+      "from": "hostname:doc.example.com",
+      "relation": "resolves_to",
+      "to": "ip:192.0.2.1"
+    }
+  ],
+  "gaps": [
+    {
+      "at": "ip:192.0.2.1",
+      "detail": "192.0.2.1 is in a non-routable range: documentation (RFC 5737, TEST-NET-1)",
+      "needs": null,
+      "reason": "private"
+    }
+  ],
+  "generated_at": "1970-01-01T00:00:00Z",
+  "nodes": [
+    {
+      "attributes": {},
+      "evidence": [],
+      "id": "hostname:doc.example.com",
+      "identifier": null,
+      "kind": "hostname",
+      "name": "doc.example.com",
+      "provider": null,
+      "service": null
+    },
+    {
+      "attributes": {
+        "non_routable": true,
+        "non_routable_reason": "documentation (RFC 5737, TEST-NET-1)"
+      },
+      "evidence": [],
+      "id": "ip:192.0.2.1",
+      "identifier": null,
+      "kind": "ip",
+      "name": "192.0.2.1",
+      "provider": null,
+      "service": null
+    }
+  ],
+  "paths": [
+    [
+      "hostname:doc.example.com",
+      "ip:192.0.2.1"
+    ]
+  ],
+  "schema_version": "1",
+  "stages_run": [
+    "dns",
+    "classify",
+    "ip_range"
+  ],
+  "target": {
+    "input": "doc.example.com",
+    "kind": "hostname"
+  }
+}

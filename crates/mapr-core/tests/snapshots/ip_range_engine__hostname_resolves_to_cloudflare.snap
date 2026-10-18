@@ -1,0 +1,122 @@
+---
+source: crates/mapr-core/tests/ip_range_engine.rs
+expression: value
+---
+{
+  "edges": [
+    {
+      "confidence": "observed",
+      "evidence": [
+        {
+          "attributes": {
+            "resolver": "fake:53",
+            "ttl": 60
+          },
+          "detail": "A site.example.com -> 104.16.0.1 (TTL 60)",
+          "observed_at": "1970-01-01T00:00:00Z",
+          "source": "dns_query"
+        }
+      ],
+      "from": "hostname:site.example.com",
+      "relation": "resolves_to",
+      "to": "ip:104.16.0.1"
+    },
+    {
+      "confidence": "observed",
+      "evidence": [
+        {
+          "attributes": {
+            "matched_ranges": [
+              {
+                "prefix": "104.16.0.0/13",
+                "service": "cloudflare"
+              }
+            ],
+            "shared_edge": true
+          },
+          "detail": "104.16.0.1 cloudflare (unknown region) matched 1 range(s)",
+          "observed_at": "1970-01-01T00:00:00Z",
+          "source": "ip_range"
+        }
+      ],
+      "from": "ip:104.16.0.1",
+      "relation": "served_by",
+      "to": "cloudflare-range:cloudflare-104.16.0.0/13"
+    }
+  ],
+  "gaps": [],
+  "generated_at": "1970-01-01T00:00:00Z",
+  "nodes": [
+    {
+      "attributes": {
+        "shared_edge": true
+      },
+      "evidence": [
+        {
+          "attributes": {
+            "matched_ranges": [
+              {
+                "prefix": "104.16.0.0/13",
+                "service": "cloudflare"
+              }
+            ],
+            "shared_edge": true
+          },
+          "detail": "104.16.0.1 cloudflare (unknown region) matched 1 range(s)",
+          "observed_at": "1970-01-01T00:00:00Z",
+          "source": "ip_range"
+        }
+      ],
+      "id": "cloudflare-range:cloudflare-104.16.0.0/13",
+      "identifier": null,
+      "kind": "cdn",
+      "name": "CLOUDFLARE cloudflare (global)",
+      "provider": "cloudflare",
+      "service": "cloudflare"
+    },
+    {
+      "attributes": {},
+      "evidence": [],
+      "id": "hostname:site.example.com",
+      "identifier": null,
+      "kind": "hostname",
+      "name": "site.example.com",
+      "provider": null,
+      "service": null
+    },
+    {
+      "attributes": {},
+      "evidence": [
+        {
+          "attributes": {},
+          "detail": "matched 104.16.0.0/13",
+          "observed_at": "1970-01-01T00:00:00Z",
+          "source": "ip_range"
+        }
+      ],
+      "id": "ip:104.16.0.1",
+      "identifier": null,
+      "kind": "ip",
+      "name": "104.16.0.1",
+      "provider": null,
+      "service": null
+    }
+  ],
+  "paths": [
+    [
+      "hostname:site.example.com",
+      "ip:104.16.0.1",
+      "cloudflare-range:cloudflare-104.16.0.0/13"
+    ]
+  ],
+  "schema_version": "1",
+  "stages_run": [
+    "dns",
+    "classify",
+    "ip_range"
+  ],
+  "target": {
+    "input": "site.example.com",
+    "kind": "hostname"
+  }
+}
