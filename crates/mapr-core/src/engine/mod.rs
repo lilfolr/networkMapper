@@ -253,71 +253,95 @@ impl Engine {
                 break;
             }
 
-            // --- Run all accepting, permitted stages concurrently ---
-            let eligible: Vec<Arc<dyn Stage>> = self
+            // --- Group stages by order ---
+            // Collect all unique order values from permitted stages that currently accept the node.
+            let mut orders: Vec<u8> = self
                 .stages
                 .iter()
-                .filter(|s| s.tier() <= max_tier && s.accepts(&node))
-                .cloned()
+                .filter(|s| s.tier() <= max_tier)
+                .map(|s| s.order())
                 .collect();
+            orders.sort_unstable();
+            orders.dedup();
 
-            // Record stage names before running.
-            for s in &eligible {
-                graph.record_stage(s.name());
-            }
+            for current_order in orders {
+                // Fetch current state of node from graph so order N stages see modifications made by order < N stages.
+                let current_node = graph
+                    .get_node(&node.id)
+                    .cloned()
+                    .unwrap_or_else(|| node.clone());
 
-            // Spawn one task per eligible stage, bounded by the semaphore.
-            let mut handles = Vec::with_capacity(eligible.len());
-            for stage in eligible {
-                let node_clone = node.clone();
-                let cx = Arc::clone(&self.context);
-                let sem = Arc::clone(&semaphore);
+                let eligible: Vec<Arc<dyn Stage>> = self
+                    .stages
+                    .iter()
+                    .filter(|s| {
+                        s.tier() <= max_tier
+                            && s.order() == current_order
+                            && s.accepts(&current_node)
+                    })
+                    .cloned()
+                    .collect();
 
-                let handle = tokio::spawn(async move {
-                    // Acquire a permit before running; this limits total
-                    // concurrent stage executions across all nodes.
-                    let _permit = sem.acquire_owned().await;
-                    // Catch panics: a panicking stage becomes a gap.
-                    let result = std::panic::AssertUnwindSafe(stage.run(&cx, &node_clone));
-                    // We cannot use catch_unwind with async directly, so we
-                    // run the future and rely on the task system to catch panics.
-                    result.await
-                });
+                if eligible.is_empty() {
+                    continue;
+                }
 
-                handles.push((stage_name_from_handle(&node), handle));
-            }
+                // Record stage names before running.
+                for s in &eligible {
+                    graph.record_stage(s.name());
+                }
 
-            for (_, handle) in handles {
-                match handle.await {
-                    Ok(output) => {
-                        // Merge nodes first so evidence-attach has targets.
-                        for new_node in output.nodes {
-                            let already_visited = visited.contains(&new_node.id);
-                            let already_in_graph = graph.contains_node(&new_node.id);
-                            graph.merge_node(new_node.clone());
-                            // Only enqueue if not yet expanded.
-                            if !already_visited && !already_in_graph {
-                                frontier.push_back((new_node, depth + 1));
+                // Spawn one task per eligible stage, bounded by the semaphore.
+                let mut handles = Vec::with_capacity(eligible.len());
+                for stage in eligible {
+                    let node_clone = current_node.clone();
+                    let cx = Arc::clone(&self.context);
+                    let sem = Arc::clone(&semaphore);
+
+                    let handle = tokio::spawn(async move {
+                        // Acquire a permit before running; this limits total
+                        // concurrent stage executions across all nodes.
+                        let _permit = sem.acquire_owned().await;
+                        // Catch panics: a panicking stage becomes a gap.
+                        let result = std::panic::AssertUnwindSafe(stage.run(&cx, &node_clone));
+                        result.await
+                    });
+
+                    handles.push((stage_name_from_handle(&current_node), handle));
+                }
+
+                for (_, handle) in handles {
+                    match handle.await {
+                        Ok(output) => {
+                            // Merge nodes first so evidence-attach has targets.
+                            for new_node in output.nodes {
+                                let already_visited = visited.contains(&new_node.id);
+                                let already_in_graph = graph.contains_node(&new_node.id);
+                                graph.merge_node(new_node.clone());
+                                // Only enqueue if not yet expanded.
+                                if !already_visited && !already_in_graph {
+                                    frontier.push_back((new_node, depth + 1));
+                                }
+                            }
+                            for edge in output.edges {
+                                graph.merge_edge(edge);
+                            }
+                            for (id, ev) in output.evidence {
+                                graph.attach_evidence(&id, ev);
+                            }
+                            for gap in output.gaps {
+                                graph.push_gap(gap);
                             }
                         }
-                        for edge in output.edges {
-                            graph.merge_edge(edge);
+                        Err(join_err) => {
+                            // The task panicked or was cancelled. Record as a gap.
+                            graph.push_gap(Gap {
+                                at: Some(current_node.id.clone()),
+                                reason: GapReason::NetworkError,
+                                detail: format!("stage task failed: {join_err}"),
+                                needs: None,
+                            });
                         }
-                        for (id, ev) in output.evidence {
-                            graph.attach_evidence(&id, ev);
-                        }
-                        for gap in output.gaps {
-                            graph.push_gap(gap);
-                        }
-                    }
-                    Err(join_err) => {
-                        // The task panicked or was cancelled. Record as a gap.
-                        graph.push_gap(Gap {
-                            at: Some(node.id.clone()),
-                            reason: GapReason::NetworkError,
-                            detail: format!("stage task failed: {join_err}"),
-                            needs: None,
-                        });
                     }
                 }
             }

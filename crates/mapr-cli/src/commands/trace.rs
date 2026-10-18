@@ -14,9 +14,12 @@ use mapr_core::stages::fingerprint::providers::cloudflare::{
 };
 use mapr_core::stages::fingerprint::range_db::{RangeDatabase, RangeSource};
 use mapr_core::stages::fingerprint::IpRangeStage;
+use mapr_core::stages::reachability::{TcpReachabilityStage, TokioReachability};
+use mapr_core::stages::reverse_dns::ReverseDnsStage;
 use mapr_core::stages::Stage;
 use mapr_core::{Engine, EngineConfig};
 use mapr_schema::ExitCode;
+use std::time::Duration;
 
 use crate::cli::{CliOutputFormat, GlobalArgs};
 
@@ -46,19 +49,45 @@ pub fn run(target: &str, global: &GlobalArgs) -> Result<ExitCode> {
     // Load range databases (best-effort; missing data becomes a gap at run time).
     let range_db = rt.block_on(build_range_db(global.offline))?;
 
-    let dns_client = Arc::new(
-        HickoryDnsClient::from_system_config()
-            .map_err(|e| anyhow::anyhow!("failed to initialise DNS client: {e}"))?,
-    );
+    let dns_client: Arc<dyn mapr_core::stages::dns::client::DnsClient> =
+        if let Some(ref res_addr) = global.resolver {
+            let ip = res_addr
+                .parse()
+                .map_err(|e| anyhow::anyhow!("invalid resolver IP address '{res_addr}': {e}"))?;
+            Arc::new(HickoryDnsClient::from_addr(ip).map_err(|e| {
+                anyhow::anyhow!("failed to initialise DNS client for '{res_addr}': {e}")
+            })?)
+        } else {
+            Arc::new(
+                HickoryDnsClient::from_system_config()
+                    .map_err(|e| anyhow::anyhow!("failed to initialise DNS client: {e}"))?,
+            )
+        };
+
+    let ports = if global.ports.is_empty() {
+        TcpReachabilityStage::default_ports()
+    } else {
+        global.ports.clone()
+    };
+
+    let reachability_client = Arc::new(TokioReachability);
+    let reachability_stage =
+        TcpReachabilityStage::new(reachability_client, ports, Duration::from_secs(3));
 
     let stages: Vec<Arc<dyn Stage>> = vec![
-        Arc::new(DnsStage::new(dns_client)),
+        Arc::new(DnsStage::new(Arc::clone(&dns_client))),
         Arc::new(ClassifyStage),
         Arc::new(IpRangeStage::new(Arc::clone(&range_db))),
+        Arc::new(ReverseDnsStage),
+        Arc::new(reachability_stage),
         Arc::new(AwsStage),
     ];
 
-    let context = Arc::new(Context::with_system_clock().with_range_db(range_db));
+    let context = Arc::new(
+        Context::with_system_clock()
+            .with_range_db(range_db)
+            .with_arc_dns_client(dns_client),
+    );
     let engine = Engine::new(stages, context);
 
     let (trace, exit_code) = rt

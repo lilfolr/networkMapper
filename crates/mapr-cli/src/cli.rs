@@ -50,6 +50,14 @@ pub struct GlobalArgs {
     /// Save trace output to a file
     #[arg(long, global = true)]
     pub save: Option<PathBuf>,
+
+    /// Custom DNS resolver IP address
+    #[arg(long, global = true)]
+    pub resolver: Option<String>,
+
+    /// Specific TCP port(s) to probe during reachability check (repeatable, max 8)
+    #[arg(long = "port", global = true)]
+    pub ports: Vec<u16>,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]

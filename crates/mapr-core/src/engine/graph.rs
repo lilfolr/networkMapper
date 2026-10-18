@@ -144,6 +144,11 @@ impl GraphState {
     // Query helpers
     // -----------------------------------------------------------------------
 
+    /// Returns a reference to the node with this id if it exists.
+    pub fn get_node(&self, id: &NodeId) -> Option<&Node> {
+        self.nodes.get(id)
+    }
+
     /// Returns `true` if a node with this id is already in the graph.
     pub fn contains_node(&self, id: &NodeId) -> bool {
         self.nodes.contains_key(id)

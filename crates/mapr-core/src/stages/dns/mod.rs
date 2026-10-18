@@ -303,6 +303,7 @@ async fn query_address_records(
                         QueryRecordType::A => "A",
                         QueryRecordType::Aaaa => "AAAA",
                         QueryRecordType::Cname => "CNAME",
+                        QueryRecordType::Ptr => "PTR",
                     };
 
                     let edge = Edge {
